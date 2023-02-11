@@ -79,18 +79,32 @@ contract Euro is ERC20, Ownable {
         _;
     }
 
+    //////////////// GOVERNANCE ////////////////
+
+    /**
+     * @dev add a token to the basket of stables backing Euro
+     */
     function addToken(address token) external onlyOwner {
         basket[token] = 1;
 
         emit BasketUpdate(token);
     }
 
+    /**
+     * @dev add a yield-generating strategy
+     */
     function addStrategy(address strategy) external onlyOwner {
         strategies.push(strategy);
 
         emit StrategiesUpdate(strategy);
     }
 
+    //////////////// SWAP ////////////////
+
+    /**
+     * @dev mint a certain amount of Euro based on the input token
+     * @todo may be necessary to trigger a swap to keep token rations
+     */
     function mint(address tokenIn, uint256 amount) external allowed(tokenIn) {
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amount);
 
@@ -98,6 +112,10 @@ contract Euro is ERC20, Ownable {
         _mint(msg.sender, toBeMinted);
     }
 
+    /**
+     * @dev burn a certain amount of Euro and get a specific token in output
+     * @todo may be necessary to trigger a swap to keep token rations
+     */
     function burn(address tokenOut, uint256 amount) external allowed(tokenOut) {
         uint256 toBeTransferred = amount / _computeRatio(tokenOut);
 
@@ -108,6 +126,11 @@ contract Euro is ERC20, Ownable {
         token.safeTransferFrom(msg.sender, address(this), amount);
     }
 
+    //////////////// AUTOMATION ////////////////
+
+    /**
+     * @dev saves the indexes of the yield generating strategies ready for harvesting
+     */
     function check() external view returns (bool, bytes memory) {
         uint8[] memory toHarvest = new uint8[](strategies.length);
 
@@ -123,6 +146,10 @@ contract Euro is ERC20, Ownable {
         return (counter > 0 ? true : false, abi.encode(toHarvest));
     }
 
+    /**
+     * @dev using the saved indexes, executes harvesting on the given strategies
+     *      and triggers a rebase (can be positive or negative in case of a loss)
+     */
     function exec(uint8[] calldata indexes) external {
         int256 results = 0;
 
@@ -134,6 +161,11 @@ contract Euro is ERC20, Ownable {
         _rebase(results);
     }
 
+    //////////////// INTERNAL FUNCTIONS ////////////////
+
+    /**
+     * @dev determines the EUR/TKN ratio (TBD)
+     */
     function _computeRatio(address token) internal view returns (uint256) {
         return 1;
     }
@@ -176,27 +208,14 @@ contract Euro is ERC20, Ownable {
         return _totalSupply;
     }
 
+    //////////////// REBASING ERC20 ////////////////
+
     function totalSupply() public view override returns (uint256) {
         return _totalSupply;
     }
 
     function balanceOf(address who) public view override returns (uint256) {
         return _gonBalances[who] / _gonsPerToken;
-    }
-
-    /**
-     * @param who The address to query.
-     * @return The gon balance of the specified address.
-     */
-    function scaledBalanceOf(address who) external view returns (uint256) {
-        return _gonBalances[who];
-    }
-
-    /**
-     * @return the total number of gons.
-     */
-    function scaledTotalSupply() external pure returns (uint256) {
-        return TOTAL_GONS;
     }
 
     function transfer(address to, uint256 value) public override validRecipient(to) returns (bool) {
